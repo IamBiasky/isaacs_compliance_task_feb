@@ -1,86 +1,87 @@
 program whitelist_blacklist.aleo;
 
-record Token:
-    owner as address.private;
-    amount as u64.private;
-    jurisdiction as u8.private;
+struct ComplianceReport:
+    timestamp as u64;
+    company_hash as field;
+    data_verified as boolean;
+    compliance_score as u8;
+    category as u8;
 
-record JurisdictionAuthorization:
-    owner as address.private;
-    jurisdiction as u8.private;
-    authorized as boolean.private;
+struct AuditProof:
+    report_hash as field;
+    verifier_id as field;
+    verification_timestamp as u32;
 
-record JurisdictionAllowlistEntry:
-    owner as address.private;
-    from_jurisdiction as u8.private;
-    to_jurisdiction as u8.private;
-    allowed as boolean.private;
+struct TimestampAndCompanyHash:
+    timestamp as u64;
+    company_hash as field;
 
-function create_allowlist_entry:
-    input r0 as u8.private;
-    input r1 as u8.private;
-    input r2 as boolean.private;
-    assert.eq self.caller aleo14z2ykyw4xlqmk0fh8mzlhxh42rutulssl7dm22ef2tm0elaz5sxq8mm39v;
-    cast aleo14z2ykyw4xlqmk0fh8mzlhxh42rutulssl7dm22ef2tm0elaz5sxq8mm39v r0 r1 r2 into r3 as JurisdictionAllowlistEntry.record;
-    output r3 as JurisdictionAllowlistEntry.record;
+struct ScoreAndCategory:
+    compliance_score as u8;
+    category as u8;
 
-function issue_jurisdiction_authorize:
-    input r0 as address.private;
-    input r1 as u8.private;
-    assert.eq self.caller aleo14z2ykyw4xlqmk0fh8mzlhxh42rutulssl7dm22ef2tm0elaz5sxq8mm39v;
-    cast r0 r1 true into r2 as JurisdictionAuthorization.record;
-    output r2 as JurisdictionAuthorization.record;
+struct ReportHashInput:
+    hash1 as field;
+    hash2 as field;
 
-function mint:
-    input r0 as address.private;
-    input r1 as u64.private;
+struct AuditHashInput:
+    hash1 as field;
+    timestamp as u32;
+
+mapping reports:
+    key as field.public;
+    value as field.public;
+
+mapping audits:
+    key as field.public;
+    value as field.public;
+
+function submit_report:
+    input r0 as ComplianceReport.private;
+    input r1 as scalar.private;
+    hash.psd2 r1 into r2 as field;
+    assert.eq r2 r0.company_hash;
+    cast r0.timestamp r0.company_hash into r3 as TimestampAndCompanyHash;
+    cast r0.compliance_score r0.category into r4 as ScoreAndCategory;
+    hash.psd2 r3 into r5 as field;
+    hash.psd2 r4 into r6 as field;
+    cast r5 r6 into r7 as ReportHashInput;
+    hash.psd2 r7 into r8 as field;
+    output r8 as field.private;
+
+function verify_report:
+    input r0 as field.private;
+    input r1 as field.private;
+    input r2 as field.private;
+    cast r0 r2 0u32 into r3 as AuditProof;
+    cast r0 0u32 into r4 as AuditHashInput;
+    hash.psd2 r4 into r5 as field;
+    output r3 as AuditProof.private;
+
+function check_compliance:
+    input r0 as field.private;
+    input r1 as field.private;
     input r2 as u8.private;
-    assert.eq self.caller aleo14z2ykyw4xlqmk0fh8mzlhxh42rutulssl7dm22ef2tm0elaz5sxq8mm39v;
-    cast r0 r1 r2 into r3 as Token.record;
-    output r3 as Token.record;
+    input r3 as u8.private;
+    output true as boolean.private;
 
-function transfer:
-    input r0 as Token.record;
-    input r1 as JurisdictionAuthorization.record;
-    input r2 as JurisdictionAllowlistEntry.record;
-    input r3 as u64.private;
-    input r4 as address.private;
-    input r5 as u8.private;
-    assert.eq r0.owner self.caller;
-    assert.eq r1.owner self.caller;
-    gte r0.amount r3 into r6;
-    assert.eq r6 true;
-    assert.eq r0.jurisdiction r1.jurisdiction;
-    assert.eq r1.authorized true;
-    assert.eq r2.owner aleo14z2ykyw4xlqmk0fh8mzlhxh42rutulssl7dm22ef2tm0elaz5sxq8mm39v;
-    assert.eq r2.from_jurisdiction r0.jurisdiction;
-    assert.eq r2.to_jurisdiction r5;
-    assert.eq r2.allowed true;
-    sub r0.amount r3 into r7;
-    cast r4 r3 r5 into r8 as Token.record;
-    cast r0.owner r7 r0.jurisdiction into r9 as Token.record;
-    output r9 as Token.record;
-    output r8 as Token.record;
+closure generate_report_hash:
+    input r0 as u64;
+    input r1 as field;
+    input r2 as u8;
+    input r3 as u8;
+    cast r0 r1 into r4 as TimestampAndCompanyHash;
+    cast r2 r3 into r5 as ScoreAndCategory;
+    hash.psd2 r4 into r6 as field;
+    hash.psd2 r5 into r7 as field;
+    cast r6 r7 into r8 as ReportHashInput;
+    hash.psd2 r8 into r9 as field;
+    output r9 as field;
 
-function revoke_jurisdiction:
-    input r0 as JurisdictionAuthorization.record;
-    assert.eq self.caller aleo14z2ykyw4xlqmk0fh8mzlhxh42rutulssl7dm22ef2tm0elaz5sxq8mm39v;
-    cast r0.owner r0.jurisdiction false into r1 as JurisdictionAuthorization.record;
-    output r1 as JurisdictionAuthorization.record;
-
-function update_allowlist_entry:
-    input r0 as JurisdictionAllowlistEntry.record;
-    input r1 as boolean.private;
-    assert.eq self.caller aleo14z2ykyw4xlqmk0fh8mzlhxh42rutulssl7dm22ef2tm0elaz5sxq8mm39v;
-    cast aleo14z2ykyw4xlqmk0fh8mzlhxh42rutulssl7dm22ef2tm0elaz5sxq8mm39v r0.from_jurisdiction r0.to_jurisdiction r1 into r2 as JurisdictionAllowlistEntry.record;
-    output r2 as JurisdictionAllowlistEntry.record;
-
-function burn:
-    input r0 as Token.record;
-    input r1 as u64.private;
-    assert.eq r0.owner self.caller;
-    gte r0.amount r1 into r2;
-    assert.eq r2 true;
-    sub r0.amount r1 into r3;
-    cast r0.owner r3 r0.jurisdiction into r4 as Token.record;
-    output r4 as Token.record;
+closure generate_audit_hash:
+    input r0 as field;
+    input r1 as field;
+    input r2 as u32;
+    cast r0 r2 into r3 as AuditHashInput;
+    hash.psd2 r3 into r4 as field;
+    output r4 as field;

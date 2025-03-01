@@ -1,193 +1,168 @@
 program whitelist_blacklist.aleo {
-    // Token record definition
-    record Token {
-        // The token owner
-        owner: address,
-        // The token balance
-        amount: u64,
-        // The jurisdiction code of the owner (could represent country codes)
-        jurisdiction: u8
+    struct ComplianceReport {
+        timestamp: u64,
+        company_hash: field,
+        data_verified: bool,
+        compliance_score: u8,
+        category: u8,
     }
+
+    struct AuditProof {
+        report_hash: field,
+        verifier_id: field,
+        verification_timestamp: u32
+    }
+
+    struct TimestampAndCompanyHash {
+        timestamp: u64,
+        company_hash: field,
+    }
+
+    struct ScoreAndCategory {
+        compliance_score: u8,
+        category: u8,
+    }
+
+    struct ReportHashInput {
+        hash1: field,
+        hash2: field,
+    }
+
+    struct AuditHashInput {
+        hash1: field,
+        timestamp: u32,
+    }
+
+    mapping reports: field => field;
     
 
-    // Jurisdiction authorization record
-    record JurisdictionAuthorization {
-        // The holder of this authorization
-        owner: address,
-        // The jurisdiction code
-        jurisdiction: u8,
-        // Whether this jurisdiction is authorized for the user
-        authorized: bool
+    mapping audits: field => field;
+
+    // Constants for compliance categories
+    const CATEGORY_FINANCIAL: u8 = 1u8;
+    const CATEGORY_ENVIRONMENTAL: u8 = 2u8;
+    const CATEGORY_DATA_PROTECTION: u8 = 3u8;
+    const CATEGORY_LABOR: u8 = 4u8;
+
+    // Function to submit a compliance report privately
+    transition submit_report(
+        report: ComplianceReport,
+        company_private_key: scalar
+    ) -> field {
+        // Use Poseidon hash for key derivation
+        let computed_hash: field = Poseidon2::hash_to_field(company_private_key);
+        assert_eq(computed_hash, report.company_hash);
+        
+        // Combine data into structs for hashing
+        let data1: TimestampAndCompanyHash = TimestampAndCompanyHash {
+            timestamp: report.timestamp,
+            company_hash: report.company_hash,
+        };
+
+        let data2: ScoreAndCategory = ScoreAndCategory {
+            compliance_score: report.compliance_score,
+            category: report.category,
+        };
+
+        // Hash the structs
+        let hash1: field = Poseidon2::hash_to_field(data1);
+        let hash2: field = Poseidon2::hash_to_field(data2);
+
+        // Combine the hashes into a single struct
+        let report_data_input: ReportHashInput = ReportHashInput {
+            hash1: hash1,
+            hash2: hash2,
+        };
+
+        // Hash the combined struct
+        let report_data: field = Poseidon2::hash_to_field(report_data_input);
+        
+        // Return the hash to be stored
+        return report_data;
     }
 
-    // Jurisdiction allowlist record (for checking if transfers between jurisdictions are allowed)
-    record JurisdictionAllowlistEntry {
-        // The admin who manages this record
-        owner: address, 
-        // The source jurisdiction
-        from_jurisdiction: u8,
-        // The destination jurisdiction
-        to_jurisdiction: u8,
-        // Whether transfers are allowed between these jurisdictions
-        allowed: bool
+    // Function for authorized auditors to verify and approve reports
+    transition verify_report(
+        report_hash: field,
+        company_hash: field,
+        verifier_id: field
+    ) -> AuditProof {
+        // Create audit proof with current block number
+        let audit_proof: AuditProof = AuditProof {
+            report_hash: report_hash,
+            verifier_id: verifier_id,
+            verification_timestamp: 0u32 // Placeholder
+        };
+        
+        // Combine data into a struct for hashing
+        let audit_input: AuditHashInput = AuditHashInput {
+            hash1: report_hash,
+            timestamp: 0u32, // Placeholder
+        };
+
+        // Hash the struct
+        let proof_hash: field = Poseidon2::hash_to_field(audit_input);
+        
+        return audit_proof;
     }
 
-    // Admin address with special permissions
-    const ADMIN: address = aleo14z2ykyw4xlqmk0fh8mzlhxh42rutulssl7dm22ef2tm0elaz5sxq8mm39v;
-    
-    // Maximum supply of tokens
-    const MAX_SUPPLY: u64 = 1000000000u64;
-
-    // Create an allowlist entry to define if transfers between jurisdictions are allowed
-    transition create_allowlist_entry(
-        from_jurisdiction: u8,
-        to_jurisdiction: u8,
-        allowed: bool
-    ) -> JurisdictionAllowlistEntry {
-        // Only the admin can create allowlist entries
-        assert_eq(self.caller, ADMIN);
-        
-        // Create a new allowlist entry
-        return JurisdictionAllowlistEntry {
-            owner: ADMIN,
-            from_jurisdiction: from_jurisdiction,
-            to_jurisdiction: to_jurisdiction,
-            allowed: allowed
-        };
+    // Function to check compliance privately
+    transition check_compliance(
+        company_hash: field,
+        report_hash: field,
+        minimum_score: u8,
+        category: u8
+    ) -> bool {
+        // In a real implementation, this would perform ZK validation
+        // of the report meeting compliance requirements
+        return true;
     }
 
-    // Issue a jurisdiction authorization to a user
-    transition issue_jurisdiction_authorize(
-        recipient: address,
-        jurisdiction: u8
-    ) -> JurisdictionAuthorization {
-        // Only the admin can issue jurisdiction authorizations
-        assert_eq(self.caller, ADMIN);
-        
-        // Create a new jurisdiction authorization
-        return JurisdictionAuthorization {
-            owner: recipient,
-            jurisdiction: jurisdiction,
-            authorized: true
+    // Standalone function to generate a compliance report hash
+    function generate_report_hash(
+        timestamp: u64,
+        company_hash: field,
+        compliance_score: u8,
+        category: u8
+    ) -> field {
+        // Combine data into structs for hashing
+        let data1: TimestampAndCompanyHash = TimestampAndCompanyHash {
+            timestamp: timestamp,
+            company_hash: company_hash,
         };
+
+        let data2: ScoreAndCategory = ScoreAndCategory {
+            compliance_score: compliance_score,
+            category: category,
+        };
+
+        // Hash the structs
+        let hash1: field = Poseidon2::hash_to_field(data1);
+        let hash2: field = Poseidon2::hash_to_field(data2);
+
+        // Combine the hashes into a single struct
+        let report_data_input: ReportHashInput = ReportHashInput {
+            hash1: hash1,
+            hash2: hash2,
+        };
+
+        // Hash the combined struct
+        return Poseidon2::hash_to_field(report_data_input);
     }
 
-    // Mint tokens (admin only)
-    transition mint(
-        recipient: address,
-        amount: u64,
-        recipient_jurisdiction: u8
-    ) -> Token {
-        // Only the admin can mint tokens
-        assert_eq(self.caller, ADMIN);
-        
-        // Create the token record
-        return Token {
-            owner: recipient,
-            amount: amount,
-            jurisdiction: recipient_jurisdiction
+    // Standalone function to generate an audit proof hash
+    function generate_audit_hash(
+        report_hash: field,
+        verifier_id: field,
+        timestamp: u32
+    ) -> field {
+        // Combine data into a struct for hashing
+        let audit_input: AuditHashInput = AuditHashInput {
+            hash1: report_hash,
+            timestamp: timestamp,
         };
-    }
 
-    // Transfer tokens between users with jurisdiction compliance checks
-    transition transfer(
-        sender_token: Token,
-        auth: JurisdictionAuthorization,
-        allowlist_entry: JurisdictionAllowlistEntry,
-        amount: u64,
-        recipient: address,
-        recipient_jurisdiction: u8
-    ) -> (Token, Token) {
-        // Verify the sender owns both the token and auth records
-        assert_eq(sender_token.owner, self.caller);
-        assert_eq(auth.owner, self.caller);
-        
-        // Verify sender has enough tokens
-        assert(sender_token.amount >= amount);
-        
-        // Verify the sender's jurisdiction matches their authorization
-        assert_eq(sender_token.jurisdiction, auth.jurisdiction);
-        
-        // Verify the sender's jurisdiction authorization is valid
-        assert(auth.authorized);
-        
-        // Verify the allowlist entry is valid
-        assert_eq(allowlist_entry.owner, ADMIN);
-        assert_eq(allowlist_entry.from_jurisdiction, sender_token.jurisdiction);
-        assert_eq(allowlist_entry.to_jurisdiction, recipient_jurisdiction);
-        assert(allowlist_entry.allowed);
-        
-        // Calculate the remaining balance
-        let remaining: u64 = sender_token.amount - amount;
-        
-        // Create the recipient's token
-        let recipient_token: Token = Token {
-            owner: recipient,
-            amount: amount,
-            jurisdiction: recipient_jurisdiction
-        };
-        
-        // Create the sender's change token
-        let sender_change: Token = Token {
-            owner: sender_token.owner,
-            amount: remaining,
-            jurisdiction: sender_token.jurisdiction
-        };
-        
-        return (sender_change, recipient_token);
-    }
-
-    // Revoke a user's jurisdiction authorization (for compliance enforcement)
-    transition revoke_jurisdiction(
-        auth: JurisdictionAuthorization
-    ) -> JurisdictionAuthorization {
-        // Only the admin can revoke jurisdiction authorizations
-        assert_eq(self.caller, ADMIN);
-        
-        // Create a revoked authorization record
-        return JurisdictionAuthorization {
-            owner: auth.owner,
-            jurisdiction: auth.jurisdiction,
-            authorized: false
-        };
-    }
-
-    // Update an existing allowlist entry
-    transition update_allowlist_entry(
-        entry: JurisdictionAllowlistEntry,
-        new_allowed: bool
-    ) -> JurisdictionAllowlistEntry {
-        // Only the admin can update allowlist entries
-        assert_eq(self.caller, ADMIN);
-        
-        // Create an updated allowlist entry
-        return JurisdictionAllowlistEntry {
-            owner: ADMIN,
-            from_jurisdiction: entry.from_jurisdiction,
-            to_jurisdiction: entry.to_jurisdiction,
-            allowed: new_allowed
-        };
-    }
-
-    // Burn tokens
-    transition burn(
-        token: Token,
-        amount: u64
-    ) -> Token {
-        // Verify the caller owns the token
-        assert_eq(token.owner, self.caller);
-        
-        // Verify there are enough tokens to burn
-        assert(token.amount >= amount);
-        
-        // Calculate the remaining balance
-        let remaining: u64 = token.amount - amount;
-        
-        // Create the output token with reduced balance
-        return Token {
-            owner: token.owner,
-            amount: remaining,
-            jurisdiction: token.jurisdiction
-        };
+        // Hash the struct
+        return Poseidon2::hash_to_field(audit_input);
     }
 }
